@@ -43,6 +43,7 @@ namespace ORMProject.DAL
                 _selectSql = $"Select {columns} From [{type.GetName()}] Where Id=";  //拼接连接字符串
             }
 
+
             {
                 string columnsString = string.Join(",", type.GetProperties().Select(p => $"[{p.GetName()}]"));  //获取列名
                 string valueString = string.Join(",", type.GetProperties().Select(p => $"@{p.GetName()}")); //拼接字符串，以参数形式展现@Name、@Introduction          
