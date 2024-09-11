@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Transactions;
 using ORMProject.Framework;
 using ORMProject.Framework.MappingAttribute;
 using ORMProject.Model;
@@ -8,9 +10,9 @@ using ORMProject.Model;
 namespace ORMProject.DAL
 {
     /// <summary>
-    /// 数据库查询关键类
+    /// 延迟提交模式，模拟DBContext
     /// </summary>
-    public class SqlHelper
+    public class SqlHelperDelay
     {
         public T FindDataList<T>(string Id) where T : BaseModel     //因为我们在SQL语句中的约束条件是id.所以我们需要对类进行约束
         {
@@ -50,6 +52,8 @@ namespace ORMProject.DAL
                     foreach (var property in type.GetProperties())
                     {
                         //property.SetValue(t, reader[property.Name].ToString() ?? null);
+                        
+                        //TODO 后期需要判断property的类型进行转换
                         property.SetValue(t, reader[property.GetColumnsName()].ToString() ?? null);
 
                     }
@@ -61,8 +65,11 @@ namespace ORMProject.DAL
             }
         }
 
+        private IList<SqlCommand> _commands = new List<SqlCommand>();
 
-        public bool Insert<T>(T t) where T : BaseModel
+
+
+        public void Insert<T>(T t) where T : BaseModel
         {
             Type type = typeof(T); //获取当前实体对象的数据类型
 
@@ -81,19 +88,12 @@ namespace ORMProject.DAL
                                             .Select(p => new SqlParameter($"@{p.GetName()}", p.GetValue(t) ?? DBNull.Value))
                                             .ToArray();
 
+            SqlCommand cmd = new SqlCommand(sql);
+            cmd.Parameters.AddRange(paraArray); //向sql中的参数注入数值
+            this._commands.Add(cmd);
 
             //通过连接池获取不同操作的连接字符串
             var conn = SqlConnectionPool.GetConnectionString(SqlConnectionPool.SqlConnectionType.Write);
-
-            //using (var connection = new SqlConnection(ConfigurationManager.SqlConnectionStringWrite))   //此处为连接数据库字符串
-            using (var connection = new SqlConnection(conn))   //此处为连接数据库字符串
-            {
-                SqlCommand cmd = new SqlCommand(sql, connection);
-                cmd.Parameters.AddRange(paraArray); //向sql中的参数注入数值
-                connection.Open();
-                var resultQuery = cmd.ExecuteNonQuery();
-                return resultQuery == 1;
-            }
         }
 
         public int Update<T>(T t) where T : BaseModel, new()
@@ -117,5 +117,45 @@ namespace ORMProject.DAL
             }
         }
 
+
+        /// <summary>
+        ///保存操作
+        /// </summary>
+        public void SaveChange()
+        {
+            // 因为只有写入数据库的才有保存操作，直接从数据库连接池中提取写连接字符出啊
+            var conn = SqlConnectionPool.GetConnectionString(SqlConnectionPool.SqlConnectionType.Write);
+            if (this._commands.Count > 0)
+            {
+
+                using (var connection = new SqlConnection(conn))
+                {
+                    connection.Open();
+                    using (SqlTransaction trans = connection.BeginTransaction())
+                    {
+                        try
+                        {
+                            foreach (var cmd in this._commands)
+                            {
+                                cmd.Connection = connection;
+                                cmd.Transaction = trans;
+                                cmd.ExecuteNonQuery();
+                            }
+
+                            trans.Commit();
+                        }
+                        catch (Exception)
+                        {
+                            trans.Rollback();
+                            throw;
+                        }
+                        finally
+                        {
+                            this._commands?.Clear();
+                        }
+                    }
+                }
+            }
+        }
     }
 }

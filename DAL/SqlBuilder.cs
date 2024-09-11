@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using ORMProject.Framework;
 using ORMProject.Framework.MappingAttribute;
 
 namespace ORMProject.DAL
@@ -26,6 +27,8 @@ namespace ORMProject.DAL
     {
         private static string _selectSql;
         private static string _InsertSql;
+        private static string _UpdateSql;
+
         static SqlBuilder()
         {
             Type type = typeof(T);  //获取当前实体对象的数据类型
@@ -51,7 +54,14 @@ namespace ORMProject.DAL
                 //string columnsString = string.Join(",", type.GetPropertiesWithoutKey().Select(p => $"[{p.GetName()}]"));  //获取列名
                 //string valueString = string.Join(",", type.GetPropertiesWithoutKey().Select(p => $"@{p.GetName()}")); //拼接字符串，以参数形式展现@Name、@Introduction          
 
-               _InsertSql = $"Insert into [{type.GetName()}] ({columnsString}) Values ({valueString})";    //这个地方不能直接拼接字符串，防止SQL注入
+                _InsertSql = $"Insert into [{type.GetName()}] ({columnsString}) Values ({valueString})";    //这个地方不能直接拼接字符串，防止SQL注入
+            }
+
+            {
+                string setParamString = string.Join(",",
+                    type.GetPropertiesWithoutKey().Select(p => $"{p.GetName()}=@{p.Name}")); //拼接字符串，以column=@column形式展现          
+
+                _UpdateSql = $"Update [{type.GetName()}] Set {setParamString} Where  Id=@Id ";    //这个地方不能直接拼接字符串，防止SQL注入
             }
         }
 
@@ -71,6 +81,11 @@ namespace ORMProject.DAL
         public static string GetInsertSql()
         {
             return _InsertSql;
+        }
+
+        public static string GetUpdateSql()
+        {
+            return _UpdateSql;
         }
     }
 }

@@ -19,7 +19,13 @@ namespace ConsoleApp1
             Console.WriteLine(result.Name);
             Console.WriteLine(result.Introduction);
 
+            result.Id = Guid.NewGuid().ToString();
+
             var isSuccess = helper.Insert(result);
+
+            result.Introduction = "这是一个新的介绍！";
+            var isUpdate = helper.Update(result);
+
 
             Console.ReadKey();
         }
